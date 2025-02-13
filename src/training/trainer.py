@@ -8,6 +8,8 @@ import os
 from tqdm import tqdm
 import numpy as np
 from ..models.eegnet import EEGNet
+from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
 
 class EEGTrainer:
     """EEG模型训练器"""
@@ -46,6 +48,15 @@ class EEGTrainer:
         # 初始化最佳模型状态
         self.best_val_loss = float('inf')
         self.patience_counter = 0
+        
+        # 设置TensorBoard
+        current_time = datetime.now().strftime('%Y%m%d-%H%M%S')
+        self.log_dir = os.path.join('runs', current_time)
+        self.writer = SummaryWriter(self.log_dir)
+        
+        # 记录模型结构
+        sample_input = next(iter(train_loader))[0][:1].to(device)
+        self.writer.add_graph(model, sample_input)
         
         # 设置Weights & Biases
         if config['training']['use_wandb']:
@@ -101,10 +112,13 @@ class EEGTrainer:
             torch.save(checkpoint,
                       os.path.join(checkpoint_dir, 'best_model.pth'))
             
-    def train_epoch(self) -> Tuple[float, float]:
+    def train_epoch(self, epoch: int) -> Tuple[float, float]:
         """
         训练一个轮次
         
+        Args:
+            epoch: 当前轮次
+            
         Returns:
             tuple: (平均训练损失, 训练准确率)
         """
@@ -114,7 +128,7 @@ class EEGTrainer:
         total = 0
         
         # 使用tqdm显示进度条
-        pbar = tqdm(self.train_loader, desc="Training")
+        pbar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}")
         
         for batch_idx, (data, target) in enumerate(pbar):
             data, target = data.to(self.device), target.to(self.device)
@@ -135,15 +149,34 @@ class EEGTrainer:
             total += target.size(0)
             
             # 更新进度条
-            pbar.set_postfix({'loss': loss.item(),
-                            'acc': 100. * correct / total})
+            current_loss = loss.item()
+            current_acc = 100. * correct / total
+            pbar.set_postfix({
+                'loss': f'{current_loss:.4f}',
+                'acc': f'{current_acc:.2f}%'
+            })
+            
+            # 记录每个batch的指标
+            step = epoch * len(self.train_loader) + batch_idx
+            self.writer.add_scalar('Loss/train_step', current_loss, step)
+            self.writer.add_scalar('Accuracy/train_step', current_acc, step)
+            
+            # 记录梯度直方图
+            if batch_idx % 100 == 0:  # 每100个batch记录一次
+                for name, param in self.model.named_parameters():
+                    if param.grad is not None:
+                        self.writer.add_histogram(f'gradients/{name}', 
+                                               param.grad, step)
             
         return total_loss / len(self.train_loader), correct / total
     
-    def validate(self) -> Tuple[float, float]:
+    def validate(self, epoch: int) -> Tuple[float, float]:
         """
         验证模型
         
+        Args:
+            epoch: 当前轮次
+            
         Returns:
             tuple: (平均验证损失, 验证准确率)
         """
@@ -161,7 +194,14 @@ class EEGTrainer:
                 correct += pred.eq(target).sum().item()
                 total += target.size(0)
                 
-        return val_loss / len(self.val_loader), correct / total
+        val_loss /= len(self.val_loader)
+        val_acc = correct / total
+        
+        # 记录验证集指标
+        self.writer.add_scalar('Loss/validation', val_loss, epoch)
+        self.writer.add_scalar('Accuracy/validation', val_acc * 100, epoch)
+        
+        return val_loss, val_acc
     
     def train(self):
         """训练模型"""
@@ -169,27 +209,35 @@ class EEGTrainer:
             print(f"\nEpoch {epoch+1}/{self.config['training']['epochs']}")
             
             # 训练一个轮次
-            train_loss, train_acc = self.train_epoch()
+            train_loss, train_acc = self.train_epoch(epoch)
             
             # 验证
-            val_loss, val_acc = self.validate()
+            val_loss, val_acc = self.validate(epoch)
             
             # 更新学习率
             if self.scheduler is not None:
                 self.scheduler.step()
+                current_lr = self.scheduler.get_last_lr()[0]
+                self.writer.add_scalar('Learning_rate', current_lr, epoch)
                 
-            # 记录指标
-            metrics = {
-                'train_loss': train_loss,
-                'train_acc': train_acc,
-                'val_loss': val_loss,
-                'val_acc': val_acc,
-                'learning_rate': self.optimizer.param_groups[0]['lr']
-            }
+            # 记录每轮的指标
+            self.writer.add_scalar('Loss/train_epoch', train_loss, epoch)
+            self.writer.add_scalar('Accuracy/train_epoch', train_acc * 100, epoch)
+            
+            # 记录模型参数分布
+            for name, param in self.model.named_parameters():
+                self.writer.add_histogram(f'parameters/{name}', 
+                                       param.data, epoch)
             
             # 记录到Weights & Biases
             if self.config['training']['use_wandb']:
-                wandb.log(metrics)
+                wandb.log({
+                    'train_loss': train_loss,
+                    'train_acc': train_acc,
+                    'val_loss': val_loss,
+                    'val_acc': val_acc,
+                    'learning_rate': self.optimizer.param_groups[0]['lr']
+                })
                 
             # 保存检查点
             is_best = val_loss < self.best_val_loss
@@ -207,4 +255,7 @@ class EEGTrainer:
                 break
                 
             print(f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc*100:.2f}%")
-            print(f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc*100:.2f}%") 
+            print(f"Val Loss: {val_loss:.4f} | Val Acc: {val_acc*100:.2f}%")
+        
+        # 关闭TensorBoard writer
+        self.writer.close() 

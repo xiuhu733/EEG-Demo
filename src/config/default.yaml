@@ -1,20 +1,23 @@
 data:
-  dataset_name: "eeg-dataset"  # Hugging Face数据集名称
+  dataset_type: "bnci2014001"  # MOABB数据集类型
+  cache_dir: "data"            # 数据缓存目录
   batch_size: 32
   num_workers: 4
-  train_ratio: 0.8
-  val_ratio: 0.1
-  test_ratio: 0.1
-  sampling_rate: 250  # Hz
+  sampling_rate: 250           # BNCI2014001数据集的采样率
+  preprocessing:
+    low_freq: 4.0             # 带通滤波器低频截止频率
+    high_freq: 40.0           # 带通滤波器高频截止频率
+    window_size: 1000         # 时间窗口大小（采样点）
+    stride: 500               # 时间窗口滑动步长（采样点）
 
 model:
   name: "EEGNet"
-  input_channels: 64  # EEG通道数
+  input_channels: 22          # BNCI2014001的EEG通道数
   dropout_rate: 0.5
   kernel_length: 64
   num_filters: 8
   pool_size: 8
-  num_classes: 4  # 分类任务的类别数
+  num_classes: 4             # BNCI2014001的运动想象类别数
 
 training:
   epochs: 100
@@ -29,7 +32,7 @@ training:
     patience: 10
     min_delta: 0.001
   checkpoint_dir: "checkpoints"
-  use_wandb: true  # 是否使用Weights & Biases进行实验跟踪
+  use_wandb: true           # 是否使用Weights & Biases进行实验跟踪
 
 evaluation:
   metrics:
@@ -37,7 +40,9 @@ evaluation:
     - "precision"
     - "recall"
     - "f1"
+    - "kappa"               # 添加Kappa系数评估指标
   visualization:
     confusion_matrix: true
     roc_curve: true
-    learning_curves: true 
+    learning_curves: true
+    topographic_maps: true  # 添加地形图可视化 

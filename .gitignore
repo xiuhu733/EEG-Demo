@@ -39,6 +39,21 @@ wandb/
 *.ckpt
 *.log
 
+# Data
+data/
+datasets/
+*.npy
+*.npz
+*.h5
+*.hdf5
+*.mat
+*.csv
+
+# Cache
+.cache/
+*cache*/
+huggingface/
+
 # OS specific
 .DS_Store
 Thumbs.db 
