@@ -1,15 +1,15 @@
 import argparse
 import yaml
 import torch
-from ..data.dataset import create_data_loaders
-from ..models.eegnet import EEGNet
-from .trainer import EEGTrainer
-from ..evaluation.evaluator import EEGEvaluator
+from src.data.dataset import create_data_loaders
+from src.models.eegnet import EEGNet
+from src.training.trainer import EEGTrainer
+from src.evaluation.evaluator import EEGEvaluator
 
 def parse_args():
     """解析命令行参数"""
     parser = argparse.ArgumentParser(description='Train EEG model')
-    parser.add_argument('--config', type=str, default='config/default.yaml',
+    parser.add_argument('--config', type=str, default='src/config/default.yaml',
                       help='Path to configuration file')
     return parser.parse_args()
 
@@ -28,8 +28,16 @@ def main():
     config = load_config(args.config)
     
     # 设置设备
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        # 打印GPU信息
+        gpu_name = torch.cuda.get_device_name(0)
+        print(f"Using GPU: {gpu_name}")
+        # 设置GPU相关配置
+        torch.backends.cudnn.benchmark = True  # 启用cuDNN自动调优
+    else:
+        device = torch.device("cpu")
+        print("Using CPU")
     
     # 创建数据加载器
     train_loader, val_loader, test_loader = create_data_loaders(config)
@@ -44,6 +52,11 @@ def main():
         pool_size=config['model']['pool_size']
     )
     
+    # 打印模型信息
+    print("\nModel Architecture:")
+    print(model)
+    print(f"\nTotal Parameters: {sum(p.numel() for p in model.parameters())}")
+    
     # 创建训练器
     trainer = EEGTrainer(
         model=model,
@@ -54,7 +67,7 @@ def main():
     )
     
     # 训练模型
-    print("Starting training...")
+    print("\nStarting training...")
     trainer.train()
     print("Training completed!")
     

@@ -74,7 +74,10 @@ class EEGNet(nn.Module):
             torch.Tensor: 分类预测结果
         """
         # 添加通道维度
-        x = x.unsqueeze(1)
+        if x.dim() == 2:
+            x = x.unsqueeze(0)  # 添加batch维度
+        if x.dim() == 3:
+            x = x.unsqueeze(1)  # 添加通道维度
         
         # 时间卷积
         x = self.conv1(x)
