@@ -1,0 +1,47 @@
+data:
+  dataset_type: "eegbci"
+  cache_dir: "data"
+  batch_size: 16
+  num_workers: 0
+  sampling_rate: 160
+  preprocessing:
+    low_freq: 7.0
+    high_freq: 30.0
+    window_size: 320
+    stride: 160
+
+model:
+  name: "TitansEEG"
+  input_channels: 64
+  hidden_dim: 256
+  chunk_size: 16
+  dropout_rate: 0.5
+  num_classes: 4
+
+training:
+  epochs: 100
+  learning_rate: 0.0003
+  weight_decay: 0.01
+  optimizer: "adamw"
+  scheduler:
+    name: "cosine"
+    T_max: 100
+    eta_min: 0.00001
+  early_stopping:
+    patience: 15
+    min_delta: 0.001
+  checkpoint_dir: "checkpoints/titans"
+  use_wandb: true
+
+evaluation:
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1"
+    - "kappa"
+  visualization:
+    confusion_matrix: true
+    roc_curve: true
+    learning_curves: true
+    topographic_maps: true 

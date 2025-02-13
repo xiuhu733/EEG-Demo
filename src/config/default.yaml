@@ -2,7 +2,7 @@ data:
   dataset_type: "eegbci"  # 使用EEGBCI数据集
   cache_dir: "data"       # 数据缓存目录
   batch_size: 32
-  num_workers: 4
+  num_workers: 0         # 暂时不使用多进程加载
   sampling_rate: 160      # EEGBCI数据集的采样率
   preprocessing:
     low_freq: 7.0        # 带通滤波器低频截止频率
