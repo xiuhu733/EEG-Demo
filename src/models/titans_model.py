@@ -24,20 +24,40 @@ class TitansEEG(nn.Module):
         """
         super(TitansEEG, self).__init__()
         
-        self.input_proj = nn.Sequential(
-            nn.Linear(input_channels, hidden_dim),
-            nn.LayerNorm(hidden_dim),
-            nn.GELU()
+        # 空间特征提取增强
+        self.spatial_conv = nn.Sequential(
+            nn.Conv2d(1, 16, (input_channels, 1), bias=False),
+            nn.BatchNorm2d(16),
+            nn.ELU(),
+            nn.Conv2d(16, 32, (1, 5), padding=(0, 2), bias=False),  # 时间卷积
+            nn.BatchNorm2d(32),
+            nn.ELU(),
+            nn.Dropout(dropout_rate)
         )
         
-        # Titans神经记忆模块
+        # 投影到高维空间，增加非线性变换
+        self.input_proj = nn.Sequential(
+            nn.Linear(32, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout_rate)
+        )
+        
+        # 神经记忆模块
         self.memory = NeuralMemory(
             dim=hidden_dim,
             chunk_size=chunk_size
         )
         
-        # 输出层
+        # 增强分类器
         self.classifier = nn.Sequential(
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.LayerNorm(hidden_dim),
+            nn.GELU(),
+            nn.Dropout(dropout_rate),
             nn.Linear(hidden_dim, hidden_dim // 2),
             nn.LayerNorm(hidden_dim // 2),
             nn.GELU(),
@@ -55,16 +75,19 @@ class TitansEEG(nn.Module):
         Returns:
             torch.Tensor: 分类预测结果
         """
-        # 调整输入维度
-        if x.dim() == 3:
-            batch_size, channels, time_steps = x.size()
-            x = x.transpose(1, 2)  # (batch_size, time_steps, channels)
+        # 添加通道维度
+        x = x.unsqueeze(1)  # (batch_size, 1, channels, time_steps)
+        
+        # 空间特征提取
+        x = self.spatial_conv(x)  # (batch_size, 32, 1, time_steps)
+        x = x.squeeze(2)  # (batch_size, 32, time_steps)
+        x = x.transpose(1, 2)  # (batch_size, time_steps, 32)
         
         # 投影到高维空间
         x = self.input_proj(x)  # (batch_size, time_steps, hidden_dim)
         
         # 应用神经记忆
-        retrieved, _ = self.memory(x)
+        retrieved, _ = self.memory(x)  # (batch_size, time_steps, hidden_dim)
         
         # 全局平均池化
         x = retrieved.mean(dim=1)  # (batch_size, hidden_dim)

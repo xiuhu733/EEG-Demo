@@ -5,33 +5,101 @@ data:
   num_workers: 0
   sampling_rate: 160
   preprocessing:
-    low_freq: 7.0
-    high_freq: 30.0
+    low_freq: 4.0
+    high_freq: 40.0
     window_size: 320
     stride: 160
 
 model:
-  name: "TitansEEG"
+  name: "titanseeg"
   input_channels: 64
-  hidden_dim: 256
+  hidden_dim: 128
   chunk_size: 16
-  dropout_rate: 0.5
+  dropout_rate: 0.2
   num_classes: 4
 
 training:
-  epochs: 100
-  learning_rate: 0.0003
-  weight_decay: 0.01
+  epochs: 200
+  learning_rate: 0.001
+  weight_decay: 0.0001
   optimizer: "adamw"
   scheduler:
     name: "cosine"
-    T_max: 100
+    T_max: 200
     eta_min: 0.00001
   early_stopping:
-    patience: 15
+    patience: 30
     min_delta: 0.001
   checkpoint_dir: "checkpoints/titans"
   use_wandb: true
+
+monitoring:
+  metrics:
+    train:              # 训练集指标
+      - name: "loss"
+        summary: "min"
+      - name: "accuracy"
+        summary: "max"
+      - name: "f1"
+        summary: "max"
+      - name: "precision"
+        summary: "max"
+      - name: "recall"
+        summary: "max"
+      - name: "kappa"
+        summary: "max"
+    val:                # 验证集指标
+      - name: "loss"
+        summary: "min"
+      - name: "accuracy"
+        summary: "max"
+      - name: "f1"
+        summary: "max"
+      - name: "precision"
+        summary: "max"
+      - name: "recall"
+        summary: "max"
+      - name: "kappa"
+        summary: "max"
+  
+  visualizations:
+    plots:              # 图表配置
+      - name: "Loss"
+        type: "line"
+        metrics: ["train/loss", "val/loss"]
+      - name: "Accuracy"
+        type: "line"
+        metrics: ["train/accuracy", "val/accuracy"]
+      - name: "F1 Score"
+        type: "line"
+        metrics: ["train/f1", "val/f1"]
+      - name: "Precision"
+        type: "line"
+        metrics: ["train/precision", "val/precision"]
+      - name: "Recall"
+        type: "line"
+        metrics: ["train/recall", "val/recall"]
+      - name: "Kappa"
+        type: "line"
+        metrics: ["train/kappa", "val/kappa"]
+      - name: "Learning Rate"
+        type: "line"
+        metric: "learning_rate"
+    
+    performance:        # 性能评估图
+      confusion_matrix:
+        enabled: true
+        frequency: 5    # 每5个epoch绘制一次
+      roc_curve:
+        enabled: true
+      pr_curve:
+        enabled: true
+    
+    logging:           # 日志配置
+      tensorboard: true
+      wandb: true
+      save_checkpoints: true
+      checkpoint_frequency: 1  # 每个epoch保存一次
 
 evaluation:
   metrics:

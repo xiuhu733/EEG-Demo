@@ -44,7 +44,7 @@ def main():
     
     # 保存配置文件
     config_path = os.path.join(run_dir, 'config.yaml')
-    if not os.path.exists(config_path):  # 只有在配置文件不存在时才保存
+    if not os.path.exists(config_path):
         with open(config_path, 'w', encoding='utf-8') as f:
             yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
     
@@ -57,14 +57,37 @@ def main():
     # 初始化wandb
     if config['training']['use_wandb']:
         try:
-            wandb.init(
-                project="eeg-classification",
-                name=run_name,
-                config=config,
-                dir=wandb_dir,
-                tags=[config['model']['name'], config['data']['dataset_type']],
-                notes="EEG分类实验"
-            )
+            # 设置wandb配置
+            wandb_config = {
+                "project": "eeg-classification",
+                "name": run_name,
+                "config": config,
+                "dir": wandb_dir,
+                "tags": [config['model']['name'], config['data']['dataset_type']],
+                "notes": "EEG分类实验"
+            }
+            
+            # 初始化wandb
+            wandb.init(**wandb_config)
+            
+            # 定义全局步数指标
+            wandb.define_metric("epoch")
+            wandb.define_metric("*", step_metric="epoch")
+            
+            # 定义训练指标
+            for metric_config in config['monitoring']['metrics']['train']:
+                wandb.define_metric(
+                    f"train/{metric_config['name']}", 
+                    summary=metric_config['summary']
+                )
+            
+            # 定义验证指标
+            for metric_config in config['monitoring']['metrics']['val']:
+                wandb.define_metric(
+                    f"val/{metric_config['name']}", 
+                    summary=metric_config['summary']
+                )
+            
             print(f"\nWandB 实验名称: {run_name}")
             print(f"在以下地址查看训练过程：{wandb.run.url}")
         except Exception as e:

@@ -23,28 +23,96 @@ data:
     attention: true       # 使用空间注意力
 
 model:
-  name: "EEGNet"
+  name: "eegnet"
   input_channels: 64      # EEGBCI的EEG通道数
-  dropout_rate: 0.65      # 增加dropout防止过拟合
+  dropout_rate: 0.4       # 降低dropout以减少正则化
   kernel_length: 64       # 增加卷积核长度以捕获更长时间依赖
   num_filters: 12         # 适当减少滤波器数量
   pool_size: 2           # 减小池化大小减少信息损失
   num_classes: 4         # EEGBCI的运动想象类别数
 
 training:
-  epochs: 200            # 增加训练轮次
-  learning_rate: 0.0005  # 降低学习率提高稳定性
-  weight_decay: 0.002    # 增加权重衰减加强正则化
-  optimizer: "adamw"     # 使用AdamW优化器
+  epochs: 300            # 增加总轮次
+  learning_rate: 0.001   # 保持较高的初始学习率
+  weight_decay: 0.0001    # 降低权重衰减
+  optimizer: "adamw"      # 使用AdamW优化器
   scheduler:
     name: "cosine"
-    T_max: 200          # 增加调度周期
-    eta_min: 0.00001    # 保持最小学习率
+    T_max: 300            # 匹配epochs
+    eta_min: 0.00001      # 保持最小学习率
   early_stopping:
-    patience: 20        # 增加早停耐心值
-    min_delta: 0.001
+    patience: 50          # 增加早停耐心值
+    min_delta: 0.0005    # 降低提升阈值
   checkpoint_dir: "checkpoints"
-  use_wandb: true       # 使用Weights & Biases进行实验跟踪
+  use_wandb: true        # 使用Weights & Biases进行实验跟踪
+
+monitoring:
+  metrics:
+    train:              # 训练集指标
+      - name: "loss"
+        summary: "min"
+      - name: "accuracy"
+        summary: "max"
+      - name: "f1"
+        summary: "max"
+      - name: "precision"
+        summary: "max"
+      - name: "recall"
+        summary: "max"
+      - name: "kappa"
+        summary: "max"
+    val:                # 验证集指标
+      - name: "loss"
+        summary: "min"
+      - name: "accuracy"
+        summary: "max"
+      - name: "f1"
+        summary: "max"
+      - name: "precision"
+        summary: "max"
+      - name: "recall"
+        summary: "max"
+      - name: "kappa"
+        summary: "max"
+  
+  visualizations:
+    plots:              # 图表配置
+      - name: "Loss"
+        type: "line"
+        metrics: ["train/loss", "val/loss"]
+      - name: "Accuracy"
+        type: "line"
+        metrics: ["train/accuracy", "val/accuracy"]
+      - name: "F1 Score"
+        type: "line"
+        metrics: ["train/f1", "val/f1"]
+      - name: "Precision"
+        type: "line"
+        metrics: ["train/precision", "val/precision"]
+      - name: "Recall"
+        type: "line"
+        metrics: ["train/recall", "val/recall"]
+      - name: "Kappa"
+        type: "line"
+        metrics: ["train/kappa", "val/kappa"]
+      - name: "Learning Rate"
+        type: "line"
+        metric: "learning_rate"
+    
+    performance:        # 性能评估图
+      confusion_matrix:
+        enabled: true
+        frequency: 5    # 每5个epoch绘制一次
+      roc_curve:
+        enabled: true
+      pr_curve:
+        enabled: true
+    
+    logging:           # 日志配置
+      tensorboard: true
+      wandb: true
+      save_checkpoints: true
+      checkpoint_frequency: 1  # 每个epoch保存一次
 
 evaluation:
   metrics:
