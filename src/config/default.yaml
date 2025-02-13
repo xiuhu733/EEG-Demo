@@ -1,38 +1,50 @@
 data:
   dataset_type: "eegbci"  # 使用EEGBCI数据集
   cache_dir: "data"       # 数据缓存目录
-  batch_size: 32
-  num_workers: 0         # 暂时不使用多进程加载
+  batch_size: 64          # 增加批量大小提高训练稳定性
+  num_workers: 0          # 暂时不使用多进程加载
   sampling_rate: 160      # EEGBCI数据集的采样率
   preprocessing:
-    low_freq: 7.0        # 带通滤波器低频截止频率
-    high_freq: 30.0      # 带通滤波器高频截止频率
-    window_size: 640     # 时间窗口大小（4秒 * 160Hz）
-    stride: 320          # 时间窗口滑动步长（2秒 * 160Hz）
+    low_freq: 8.0         # 调整到mu节律起始频率
+    high_freq: 30.0       # 保持beta节律上限
+    window_size: 800      # 增加窗口大小以捕获更多时间信息
+    stride: 400           # 相应调整步长
+  augmentation:
+    enabled: true         # 启用数据增强
+    p_noise: 0.5          # 添加噪声的概率
+    p_flip: 0.3           # 信号翻转的概率
+    p_mask: 0.3           # 时间掩码的概率
+    noise_scale: 0.1      # 高斯噪声的标准差
+    mask_ratio: 0.1       # 掩码比例
+  spatial_filter:
+    enabled: true         # 启用空间滤波
+    type: "csp"           # 使用CSP滤波器
+    n_components: 16      # CSP组件数量
+    attention: true       # 使用空间注意力
 
 model:
   name: "EEGNet"
-  input_channels: 64     # EEGBCI的EEG通道数
-  dropout_rate: 0.5
-  kernel_length: 32      # 减小卷积核长度
-  num_filters: 8
-  pool_size: 4          # 减小池化大小
-  num_classes: 4        # EEGBCI的运动想象类别数
+  input_channels: 64      # EEGBCI的EEG通道数
+  dropout_rate: 0.65      # 增加dropout防止过拟合
+  kernel_length: 64       # 增加卷积核长度以捕获更长时间依赖
+  num_filters: 12         # 适当减少滤波器数量
+  pool_size: 2           # 减小池化大小减少信息损失
+  num_classes: 4         # EEGBCI的运动想象类别数
 
 training:
-  epochs: 100
-  learning_rate: 0.001
-  weight_decay: 0.0001
-  optimizer: "adam"
+  epochs: 200            # 增加训练轮次
+  learning_rate: 0.0005  # 降低学习率提高稳定性
+  weight_decay: 0.002    # 增加权重衰减加强正则化
+  optimizer: "adamw"     # 使用AdamW优化器
   scheduler:
     name: "cosine"
-    T_max: 100
-    eta_min: 0.00001
+    T_max: 200          # 增加调度周期
+    eta_min: 0.00001    # 保持最小学习率
   early_stopping:
-    patience: 10
+    patience: 20        # 增加早停耐心值
     min_delta: 0.001
   checkpoint_dir: "checkpoints"
-  use_wandb: true      # 是否使用Weights & Biases进行实验跟踪
+  use_wandb: true       # 使用Weights & Biases进行实验跟踪
 
 evaluation:
   metrics:

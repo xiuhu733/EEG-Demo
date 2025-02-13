@@ -6,13 +6,13 @@ from datetime import datetime
 
 def load_config(config_path):
     """加载配置文件"""
-    with open(config_path, 'r') as f:
+    with open(config_path, 'r', encoding='utf-8') as f:
         return yaml.safe_load(f)
 
 def save_config(config, config_path):
     """保存配置文件"""
-    with open(config_path, 'w') as f:
-        yaml.dump(config, f, default_flow_style=False)
+    with open(config_path, 'w', encoding='utf-8') as f:
+        yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
 
 def train_model(config_path):
     """训练模型"""

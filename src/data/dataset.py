@@ -14,6 +14,7 @@ class EEGDataset(Dataset):
                  dataset_type: str = "eegbci",
                  split: str = "train",
                  transform: Optional[callable] = None,
+                 augment: Optional[callable] = None,
                  window_size: int = 640,
                  stride: int = 320):
         """
@@ -24,14 +25,17 @@ class EEGDataset(Dataset):
             dataset_type: 数据集类型 ('sample' 或 'eegbci')
             split: 数据集划分（'train', 'val', 或 'test'）
             transform: 数据转换函数
+            augment: 数据增强函数
             window_size: 时间窗口大小
             stride: 滑动步长
         """
         self.data_dir = Path(data_dir) / dataset_type
         self.dataset_type = dataset_type
         self.transform = transform
+        self.augment = augment
         self.window_size = window_size
         self.stride = stride
+        self.split = split  # 保存split参数为实例属性
         
         # 加载数据
         raw_data = np.load(self.data_dir / 'eeg_data.npy')
@@ -98,6 +102,11 @@ class EEGDataset(Dataset):
         eeg_data = torch.tensor(eeg_data, dtype=torch.float32)
         label = torch.tensor(int(label), dtype=torch.long)
         
+        # 应用数据增强（仅在训练集上）
+        if self.split == 'train' and self.augment is not None:
+            eeg_data = self.augment(eeg_data)
+        
+        # 应用数据转换
         if self.transform:
             eeg_data = self.transform(eeg_data)
             
@@ -202,33 +211,75 @@ def create_data_loaders(config: dict) -> Tuple[DataLoader, DataLoader, DataLoade
     Returns:
         tuple: (train_loader, val_loader, test_loader)
     """
+    # 创建数据转换器
     transform = EEGTransform(sampling_rate=config['data']['sampling_rate'])
+    
+    # 创建数据增强器（如果启用）
+    augment = None
+    if config['data']['augmentation']['enabled']:
+        from .augmentation import EEGAugmentation
+        augment = EEGAugmentation(
+            p_noise=config['data']['augmentation']['p_noise'],
+            p_flip=config['data']['augmentation']['p_flip'],
+            p_mask=config['data']['augmentation']['p_mask'],
+            noise_scale=config['data']['augmentation']['noise_scale'],
+            mask_ratio=config['data']['augmentation']['mask_ratio']
+        )
+    
+    # 创建空间滤波器（如果启用）
+    spatial_filter = None
+    if config['data']['spatial_filter']['enabled']:
+        from .spatial_filter import CSPFilter
+        spatial_filter = CSPFilter(
+            n_components=config['data']['spatial_filter']['n_components']
+        )
     
     # 从配置中获取窗口参数
     window_size = config['data']['preprocessing']['window_size']
     stride = config['data']['preprocessing']['stride']
     
     # 创建数据集
-    train_dataset = EEGDataset(config['data']['cache_dir'], 
-                              dataset_type=config['data']['dataset_type'],
-                              split='train',
-                              transform=transform,
-                              window_size=window_size,
-                              stride=stride)
+    train_dataset = EEGDataset(
+        config['data']['cache_dir'], 
+        dataset_type=config['data']['dataset_type'],
+        split='train',
+        transform=transform,
+        augment=augment,
+        window_size=window_size,
+        stride=stride
+    )
     
-    val_dataset = EEGDataset(config['data']['cache_dir'],
-                            dataset_type=config['data']['dataset_type'],
-                            split='val',
-                            transform=transform,
-                            window_size=window_size,
-                            stride=stride)
+    val_dataset = EEGDataset(
+        config['data']['cache_dir'],
+        dataset_type=config['data']['dataset_type'],
+        split='val',
+        transform=transform,
+        window_size=window_size,
+        stride=stride
+    )
     
-    test_dataset = EEGDataset(config['data']['cache_dir'],
-                             dataset_type=config['data']['dataset_type'],
-                             split='test',
-                             transform=transform,
-                             window_size=window_size,
-                             stride=stride)
+    test_dataset = EEGDataset(
+        config['data']['cache_dir'],
+        dataset_type=config['data']['dataset_type'],
+        split='test',
+        transform=transform,
+        window_size=window_size,
+        stride=stride
+    )
+    
+    # 如果启用了CSP，训练并应用空间滤波
+    if spatial_filter is not None:
+        # 获取所有训练数据
+        X_train = train_dataset.data
+        y_train = train_dataset.segment_labels
+        
+        # 训练CSP滤波器
+        spatial_filter.fit(X_train, y_train)
+        
+        # 应用CSP滤波
+        train_dataset.data = spatial_filter.transform(train_dataset.data)
+        val_dataset.data = spatial_filter.transform(val_dataset.data)
+        test_dataset.data = spatial_filter.transform(test_dataset.data)
     
     # 设置数据加载器参数
     loader_kwargs = {
@@ -238,19 +289,25 @@ def create_data_loaders(config: dict) -> Tuple[DataLoader, DataLoader, DataLoade
     }
     
     # 创建数据加载器
-    train_loader = DataLoader(train_dataset,
-                            batch_size=config['data']['batch_size'],
-                            shuffle=True,
-                            **loader_kwargs)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=config['data']['batch_size'],
+        shuffle=True,
+        **loader_kwargs
+    )
     
-    val_loader = DataLoader(val_dataset,
-                          batch_size=config['data']['batch_size'],
-                          shuffle=False,
-                          **loader_kwargs)
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=config['data']['batch_size'],
+        shuffle=False,
+        **loader_kwargs
+    )
     
-    test_loader = DataLoader(test_dataset,
-                           batch_size=config['data']['batch_size'],
-                           shuffle=False,
-                           **loader_kwargs)
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=config['data']['batch_size'],
+        shuffle=False,
+        **loader_kwargs
+    )
     
     return train_loader, val_loader, test_loader 

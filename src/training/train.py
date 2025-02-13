@@ -3,12 +3,16 @@ import torch
 import yaml
 import wandb
 import argparse
+import warnings
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 from src.models.model_factory import create_model
 from src.data.dataset import EEGDataset
 from src.utils.trainer import Trainer
+
+# 忽略特定的警告
+warnings.filterwarnings('ignore', message='Using padding=\'same\'')
 
 def main():
     # 解析命令行参数
@@ -40,8 +44,9 @@ def main():
     
     # 保存配置文件
     config_path = os.path.join(run_dir, 'config.yaml')
-    with open(config_path, 'w') as f:
-        yaml.dump(config, f, default_flow_style=False)
+    if not os.path.exists(config_path):  # 只有在配置文件不存在时才保存
+        with open(config_path, 'w', encoding='utf-8') as f:
+            yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
     
     # 设置tensorboard
     writer = SummaryWriter(tensorboard_dir)
@@ -51,16 +56,21 @@ def main():
     
     # 初始化wandb
     if config['training']['use_wandb']:
-        wandb.init(
-            project="eeg-classification",
-            name=run_name,
-            config=config,
-            dir=wandb_dir,
-            tags=[config['model']['name'], config['data']['dataset_type']],
-            notes="EEG分类实验"
-        )
-        print(f"\nWandB 实验名称: {run_name}")
-        print(f"在以下地址查看训练过程：{wandb.run.url}")
+        try:
+            wandb.init(
+                project="eeg-classification",
+                name=run_name,
+                config=config,
+                dir=wandb_dir,
+                tags=[config['model']['name'], config['data']['dataset_type']],
+                notes="EEG分类实验"
+            )
+            print(f"\nWandB 实验名称: {run_name}")
+            print(f"在以下地址查看训练过程：{wandb.run.url}")
+        except Exception as e:
+            print(f"\nWandB 初始化失败: {str(e)}")
+            print("继续训练，但不会记录到WandB")
+            config['training']['use_wandb'] = False
     
     # 设置设备
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -127,7 +137,7 @@ def main():
         device=device,
         config=config,
         writer=writer,
-        exp_dir=run_dir  # 使用run_dir作为实验目录
+        exp_dir=run_dir
     )
     
     # 开始训练

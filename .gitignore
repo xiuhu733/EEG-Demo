@@ -24,36 +24,81 @@ wheels/
 venv/
 env/
 ENV/
+.env/
+.venv/
+env.bak/
+venv.bak/
 
 # IDE
 .idea/
 .vscode/
 *.swp
 *.swo
+.vs/
+*.sublime-workspace
+*.sublime-project
 
 # Project specific
 checkpoints/
 results/
 wandb/
+runs/
+logs/
 *.pth
 *.ckpt
+*.pt
 *.log
+*.out
 
 # Data
 data/
 datasets/
+raw_data/
+processed_data/
 *.npy
 *.npz
 *.h5
 *.hdf5
 *.mat
 *.csv
+*.pkl
+*.json
 
 # Cache
 .cache/
 *cache*/
 huggingface/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# Documentation
+docs/_build/
+site/
 
 # OS specific
 .DS_Store
-Thumbs.db 
+Thumbs.db
+*.swp
+*.bak
+*~
+Desktop.ini
+
+# Weights & Biases
+wandb/
+*.wandb
+
+# Tensorboard
+runs/
+events.out.tfevents.*
+
+# Custom project specific
+eeg_data/
+model_weights/
+visualization/
+temp/
+.env 

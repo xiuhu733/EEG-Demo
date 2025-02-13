@@ -4,7 +4,14 @@ import wandb
 from tqdm import tqdm
 from typing import Dict, Optional
 import numpy as np
-from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, cohen_kappa_score
+from sklearn.metrics import (
+    accuracy_score, 
+    precision_score, 
+    recall_score, 
+    f1_score, 
+    cohen_kappa_score,
+    confusion_matrix
+)
 import matplotlib.pyplot as plt
 import seaborn as sns
 
@@ -213,9 +220,9 @@ class Trainer:
         """计算评估指标"""
         return {
             'accuracy': accuracy_score(labels, preds),
-            'precision': precision_score(labels, preds, average='weighted'),
-            'recall': recall_score(labels, preds, average='weighted'),
-            'f1': f1_score(labels, preds, average='weighted'),
+            'precision': precision_score(labels, preds, average='weighted', zero_division=0),
+            'recall': recall_score(labels, preds, average='weighted', zero_division=0),
+            'f1': f1_score(labels, preds, average='weighted', zero_division=0),
             'kappa': cohen_kappa_score(labels, preds)
         }
     
