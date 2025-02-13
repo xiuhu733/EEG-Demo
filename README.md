@@ -60,7 +60,10 @@ model:
 ### TitansEEG
 - 空间特征提取层：增强空间信息处理
 - 投影层：高维特征变换
-- 神经记忆模块：长期依赖建模
+- 神经记忆模块：使用基础版本的Neural Memory进行长期依赖建模
+  - 基于[titans-pytorch](https://github.com/lucidrains/titans-pytorch)的NeuralMemory实现
+  - 不使用MAC (Memory as Context)配置
+  - 适用于EEG信号的实时处理
 - 分类器：多层非线性变换
 
 配置参数：
@@ -68,11 +71,16 @@ model:
 model:
   name: "titanseeg"
   input_channels: 64
-  hidden_dim: 128
-  chunk_size: 16
+  hidden_dim: 128    # 神经记忆模块的隐藏维度
+  chunk_size: 16     # 记忆块大小，较小的值适合较短序列
   dropout_rate: 0.2
   num_classes: 4
 ```
+
+注意：我们选择使用基础版本的Neural Memory而不是完整的MAC配置，原因是：
+1. 基础版本计算开销更小，更适合实时EEG处理
+2. EEG序列相对较短，不需要复杂的长期记忆机制
+3. 在有限的GPU内存下可以获得更好的性能平衡
 
 ## 数据处理
 
@@ -199,41 +207,3 @@ pyriemann
 ## 许可证
 
 本项目采用 MIT 许可证
-
-## 引用
-
-如果您在研究中使用了本项目，请引用以下论文和项目：
-
-### TitansEEG模型
-本项目的TitansEEG模型基于[titans-pytorch](https://github.com/lucidrains/titans-pytorch)实现，这是Titans论文的非官方PyTorch实现。
-
-```bibtex
-@inproceedings{Behrouz2024TitansLT,
-    title   = {Titans: Learning to Memorize at Test Time},
-    author  = {Ali Behrouz and Peilin Zhong and Vahab S. Mirrokni},
-    year    = {2024},
-    url     = {https://api.semanticscholar.org/CorpusID:275212078}
-}
-```
-
-### EEGNet模型
-```bibtex
-@article{lawhern2018eegnet,
-    title   = {EEGNet: A Compact Convolutional Neural Network for EEG-based Brain-Computer Interfaces},
-    author  = {Lawhern, Vernon J and Solon, Amelia J and Waytowich, Nicholas R and Gordon, Stephen M and Hung, Chou P and Lance, Brent J},
-    journal = {Journal of Neural Engineering},
-    year    = {2018},
-    volume  = {15},
-    number  = {5},
-    pages   = {056013}
-}
-```
-
-## 致谢
-
-特别感谢以下开源项目的贡献：
-
-- [titans-pytorch](https://github.com/lucidrains/titans-pytorch): 提供了Titans的PyTorch实现
-- [MNE-Python](https://mne.tools/stable/index.html): 提供了EEG数据处理的工具
-- [PyTorch](https://pytorch.org/): 深度学习框架
-- [Weights & Biases](https://wandb.ai/): 实验跟踪和可视化平台 
