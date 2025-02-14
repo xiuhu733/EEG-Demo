@@ -123,6 +123,7 @@ class EEGTransform:
             sampling_rate: 采样率（Hz）
         """
         self.sampling_rate = sampling_rate
+        self.csp_filter = None
         
     def bandpass_filter(self, data: np.ndarray, 
                        low_freq: float = 7.0, 
@@ -169,37 +170,33 @@ class EEGTransform:
     
     def __call__(self, data: torch.Tensor) -> torch.Tensor:
         """
-        转换EEG数据
+        应用所有预处理步骤
         
         Args:
             data: 输入数据，形状为 (channels, time_steps)
             
         Returns:
-            torch.Tensor: 转换后的数据，形状为 (channels, time_steps)
+            torch.Tensor: 预处理后的数据
         """
-        # 确保输入是二维的
-        if data.dim() == 1:
-            data = data.unsqueeze(0)
-        elif data.dim() > 2:
-            raise ValueError(f"输入数据维度应为1或2，但得到{data.dim()}维")
-        
-        # 转换为NumPy数组进行处理
+        # 转换为numpy数组进行处理
         data_np = data.numpy()
         
-        # 应用带通滤波
-        filtered_data = self.bandpass_filter(data_np)
+        # 1. 带通滤波
+        data_filtered = self.bandpass_filter(data_np)
         
-        # 标准化
-        normalized_data = self.normalize(filtered_data)
-        
-        # 转换回PyTorch张量并确保形状正确
-        output = torch.from_numpy(normalized_data).float()
-        
-        # 确保输出是(channels, time_steps)形状
-        if output.dim() != 2:
-            raise ValueError(f"输出数据维度应为2，但得到{output.dim()}维")
+        # 2. 应用CSP滤波（如果可用）
+        if self.csp_filter is not None:
+            # 扩展维度以匹配CSP的输入要求
+            data_filtered = np.expand_dims(data_filtered, 0)  # (1, channels, time_steps)
+            data_filtered = self.csp_filter.transform(data_filtered)
+            data_filtered = np.squeeze(data_filtered, 0)  # (channels, time_steps)
             
-        return output
+            # 应用归一化
+            if self.csp_filter.mean_ is not None and self.csp_filter.std_ is not None:
+                data_filtered = (data_filtered - self.csp_filter.mean_[:, None]) / self.csp_filter.std_[:, None]
+        
+        # 转换回PyTorch张量
+        return torch.from_numpy(data_filtered).float()
 
 def create_data_loaders(config: dict) -> Tuple[DataLoader, DataLoader, DataLoader]:
     """

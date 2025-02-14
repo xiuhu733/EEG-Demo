@@ -32,16 +32,16 @@ model:
   num_classes: 4         # EEGBCI的运动想象类别数
 
 training:
-  epochs: 300            # 增加总轮次
+  epochs: 500            # 增加总轮次
   learning_rate: 0.001   # 保持较高的初始学习率
   weight_decay: 0.0001    # 降低权重衰减
   optimizer: "adamw"      # 使用AdamW优化器
   scheduler:
     name: "cosine"
-    T_max: 300            # 匹配epochs
+    T_max: 500            # 匹配epochs
     eta_min: 0.00001      # 保持最小学习率
   early_stopping:
-    patience: 50          # 增加早停耐心值
+    patience: 100          # 增加早停耐心值
     min_delta: 0.0005    # 降低提升阈值
   checkpoint_dir: "checkpoints"
   use_wandb: true        # 使用Weights & Biases进行实验跟踪
