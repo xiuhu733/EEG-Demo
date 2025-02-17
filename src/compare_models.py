@@ -21,8 +21,8 @@ def train_model(config_path):
 
 def main():
     parser = argparse.ArgumentParser(description='比较不同的EEG分类模型')
-    parser.add_argument('--model', type=str, choices=['eegnet', 'titans'], required=True,
-                      help='选择要训练的模型 (eegnet 或 titans)')
+    parser.add_argument('--model', type=str, choices=['eegnet', 'titans', 'titanseegmac', 'eeglstm'], required=True,
+                      help='选择要训练的模型 (eegnet、titans、titanseegmac 或 eeglstm)')
     parser.add_argument('--batch_size', type=int, default=None,
                       help='批量大小 (可选)')
     parser.add_argument('--learning_rate', type=float, default=None,
@@ -34,8 +34,12 @@ def main():
     # 选择配置文件
     if args.model == 'eegnet':
         config_path = 'src/config/default.yaml'
-    else:
+    elif args.model == 'titans':
         config_path = 'src/config/titans.yaml'
+    elif args.model == 'titanseegmac':
+        config_path = 'src/config/titans_mac.yaml'
+    else:  # eeglstm
+        config_path = 'src/config/lstm.yaml'
 
     # 加载配置
     config = load_config(config_path)

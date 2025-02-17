@@ -1,0 +1,48 @@
+model:
+  name: "eeglstm"
+  input_channels: 64
+  hidden_dim: 128
+  num_layers: 1  # 改为单层
+  num_classes: 4
+  dropout_rate: 0.3  # 降低dropout率
+  bidirectional: true
+
+training:
+  epochs: 200
+  batch_size: 32
+  optimizer:
+    name: "adamw"  # 使用AdamW优化器
+    learning_rate: 0.0005  # 降低初始学习率
+    weight_decay: 0.01    # 增加权重衰减
+  
+  scheduler:
+    name: "cosine"  # 使用余弦退火
+    T_max: 200
+    eta_min: 0.00001
+  
+  early_stopping:
+    patience: 30
+    min_delta: 0.001
+    
+  gradient_clipping:  # 添加梯度裁剪
+    max_norm: 1.0
+    
+data:
+  dataset_type: "eeg"
+  cache_dir: "data/cache"
+  batch_size: 32
+  num_workers: 4
+  
+  preprocessing:
+    sampling_rate: 250
+    low_freq: 4
+    high_freq: 45
+    window_size: 1000
+    stride: 250
+    
+  augmentation:
+    noise_prob: 0.3
+    noise_scale: 0.05
+    flip_prob: 0.3
+    mask_prob: 0.3
+    mask_ratio: 0.1 

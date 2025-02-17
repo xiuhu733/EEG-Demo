@@ -5,6 +5,7 @@ from typing import Tuple, Optional, List
 import mne
 from pathlib import Path
 from scipy.signal import butter, filtfilt
+from .spatial_filter import CSPFilter, SpatialAttention
 
 class EEGDataset(Dataset):
     """EEG数据集类"""
@@ -16,7 +17,8 @@ class EEGDataset(Dataset):
                  transform: Optional[callable] = None,
                  augment: Optional[callable] = None,
                  window_size: int = 640,
-                 stride: int = 320):
+                 stride: int = 320,
+                 spatial_filter_config=None):
         """
         初始化EEG数据集
         
@@ -28,7 +30,9 @@ class EEGDataset(Dataset):
             augment: 数据增强函数
             window_size: 时间窗口大小
             stride: 滑动步长
+            spatial_filter_config: 空间滤波器配置
         """
+        super().__init__()
         self.data_dir = Path(data_dir) / dataset_type
         self.dataset_type = dataset_type
         self.transform = transform
@@ -81,6 +85,21 @@ class EEGDataset(Dataset):
         else:  # test
             self.indices = indices[train_size + val_size:]
         
+        # Initialize spatial filter if enabled
+        self.spatial_filter = None
+        if spatial_filter_config and spatial_filter_config['enabled']:
+            self.spatial_filter = CSPFilter(
+                n_components=spatial_filter_config['n_components']
+            )
+            if split == 'train':
+                self.spatial_filter.fit(self.data, self.segment_labels)
+        
+        # Initialize spatial attention if enabled
+        self.spatial_attention = None
+        if spatial_filter_config and spatial_filter_config['attention']:
+            n_channels = self.spatial_filter.n_components if self.spatial_filter else self.data.shape[1]
+            self.spatial_attention = SpatialAttention(n_channels)
+        
     def __len__(self) -> int:
         return len(self.indices)
     
@@ -98,13 +117,28 @@ class EEGDataset(Dataset):
         eeg_data = self.data[real_idx]  # 获取一个时间窗口的数据
         label = self.segment_labels[real_idx]
         
+        # 应用空间滤波（如果启用）
+        if self.spatial_filter is not None:
+            eeg_data = self.spatial_filter.transform(eeg_data.reshape(1, *eeg_data.shape))[0]
+        
+        # 应用空间注意力（如果启用）
+        if self.spatial_attention is not None:
+            eeg_data = self.spatial_attention(eeg_data.unsqueeze(0))[0]
+        
         # 转换为torch张量
         eeg_data = torch.tensor(eeg_data, dtype=torch.float32)
         label = torch.tensor(int(label), dtype=torch.long)
         
         # 应用数据增强（仅在训练集上）
         if self.split == 'train' and self.augment is not None:
-            eeg_data = self.augment(eeg_data)
+            if np.random.random() < 0.5:
+                eeg_data = eeg_data + torch.randn_like(eeg_data) * 0.1  # Add Gaussian noise
+            if np.random.random() < 0.3:
+                eeg_data = torch.flip(eeg_data, dims=[0])  # Random channel flip
+            if np.random.random() < 0.3:
+                mask_size = int(0.1 * eeg_data.shape[1])
+                mask_start = np.random.randint(0, eeg_data.shape[1] - mask_size)
+                eeg_data[:, mask_start:mask_start+mask_size] = 0  # Time masking
         
         # 应用数据转换
         if self.transform:

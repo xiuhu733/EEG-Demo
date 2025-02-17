@@ -5,7 +5,6 @@ import wandb
 import argparse
 import warnings
 from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
 from datetime import datetime
 from src.models.model_factory import create_model
 from src.data.dataset import EEGDataset
@@ -31,12 +30,10 @@ def main():
     
     # 创建子目录
     checkpoints_dir = os.path.join(run_dir, 'checkpoints')
-    tensorboard_dir = os.path.join(run_dir, 'tensorboard')
     wandb_dir = os.path.join(run_dir, 'wandb')
     
     os.makedirs(run_dir, exist_ok=True)
     os.makedirs(checkpoints_dir, exist_ok=True)
-    os.makedirs(tensorboard_dir, exist_ok=True)
     os.makedirs(wandb_dir, exist_ok=True)
     
     # 更新配置中的目录
@@ -47,12 +44,6 @@ def main():
     if not os.path.exists(config_path):
         with open(config_path, 'w', encoding='utf-8') as f:
             yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
-    
-    # 设置tensorboard
-    writer = SummaryWriter(tensorboard_dir)
-    print(f"\nTensorboard 日志目录: {tensorboard_dir}")
-    print("运行以下命令查看训练过程：")
-    print(f"tensorboard --logdir={tensorboard_dir}")
     
     # 初始化wandb
     if config['training']['use_wandb']:
@@ -159,17 +150,15 @@ def main():
         scheduler=scheduler,
         device=device,
         config=config,
-        writer=writer,
         exp_dir=run_dir
     )
     
     # 开始训练
     trainer.train()
     
-    # 关闭wandb和tensorboard
+    # 关闭wandb
     if config['training']['use_wandb']:
         wandb.finish()
-    writer.close()
 
 if __name__ == '__main__':
     main() 

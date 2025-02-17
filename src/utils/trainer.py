@@ -2,7 +2,7 @@ import os
 import torch
 import wandb
 from tqdm import tqdm
-from typing import Dict, Optional
+from typing import Dict
 import numpy as np
 from sklearn.metrics import (
     accuracy_score, 
@@ -26,7 +26,6 @@ class Trainer:
         scheduler: torch.optim.lr_scheduler._LRScheduler,
         device: torch.device,
         config: Dict,
-        writer: 'torch.utils.tensorboard.SummaryWriter',
         exp_dir: str
     ):
         self.model = model
@@ -37,13 +36,12 @@ class Trainer:
         self.scheduler = scheduler
         self.device = device
         self.config = config
-        self.writer = writer
         self.exp_dir = exp_dir
         
         self.best_val_loss = float('inf')
         self.best_val_acc = 0.0
         self.patience_counter = 0
-        self.current_epoch = 0  # 添加当前epoch计数器
+        self.current_epoch = 0
         
         # 记录训练历史
         self.history = {
@@ -61,18 +59,12 @@ class Trainer:
         print(f"Trainable Parameters: {trainable_params:,}")
         
     def log_metrics(self, metrics: Dict[str, float], step: int, prefix: str = ''):
-        """记录指标到tensorboard和wandb"""
-        # 记录到tensorboard
-        for name, value in metrics.items():
-            self.writer.add_scalar(f'{prefix}/{name}', value, step)
-        
-        # 记录到wandb
+        """记录指标到wandb"""
         if self.config['training']['use_wandb']:
             wandb_metrics = {}
             for name, value in metrics.items():
-                # 使用新的指标命名约定
                 metric_name = f"{prefix}/{name}" if prefix else name
-                wandb_metrics[metric_name] = float(value)  # 确保值是浮点数
+                wandb_metrics[metric_name] = float(value)
             
             # 添加当前学习率和epoch
             wandb_metrics.update({
@@ -82,15 +74,13 @@ class Trainer:
             
             # 计算全局步数
             global_step = step * len(self.train_loader)
-            wandb.log(wandb_metrics, step=global_step)  # 使用全局步数作为step参数
+            wandb.log(wandb_metrics, step=global_step)
     
     def plot_confusion_matrix(self, preds: list, labels: list, epoch: int):
         """绘制混淆矩阵"""
-        # 检查是否启用混淆矩阵可视化
         if not self.config['monitoring']['visualizations']['performance']['confusion_matrix']['enabled']:
             return
             
-        # 检查是否到达绘制频率
         freq = self.config['monitoring']['visualizations']['performance']['confusion_matrix']['frequency']
         if epoch % freq != 0:
             return
@@ -107,10 +97,7 @@ class Trainer:
         plt.savefig(cm_path)
         plt.close()
         
-        # 记录到tensorboard和wandb
-        if self.config['monitoring']['visualizations']['logging']['tensorboard']:
-            self.writer.add_figure('Confusion Matrix', plt.gcf(), epoch)
-        if self.config['monitoring']['visualizations']['logging']['wandb']:
+        if self.config['training']['use_wandb']:
             wandb.log({'confusion_matrix': wandb.Image(cm_path)}, step=epoch)
     
     def plot_learning_curves(self):
@@ -149,7 +136,6 @@ class Trainer:
         plt.savefig(curves_path)
         plt.close()
         
-        # 记录到wandb
         if self.config['training']['use_wandb']:
             wandb.log({'learning_curves': wandb.Image(curves_path)})
     
@@ -188,18 +174,16 @@ class Trainer:
             total_loss += loss.item()
             
             # 每10个批次记录一次指标
-            if batch_idx % 10 == 0:
-                # 计算全局步数
+            if batch_idx % 10 == 0 and self.config['training']['use_wandb']:
                 step = (self.current_epoch - 1) * len(self.train_loader) + batch_idx
-                if self.config['training']['use_wandb']:
-                    batch_metrics = {
-                        'batch/loss': running_loss,
-                        'batch/accuracy': running_acc,
-                        'learning_rate': self.scheduler.get_last_lr()[0],
-                        'epoch': float(self.current_epoch),
-                        'step': float(step)
-                    }
-                    wandb.log(batch_metrics, step=step)  # 使用全局步数作为step参数
+                batch_metrics = {
+                    'batch/loss': running_loss,
+                    'batch/accuracy': running_acc,
+                    'learning_rate': self.scheduler.get_last_lr()[0],
+                    'epoch': float(self.current_epoch),
+                    'step': float(step)
+                }
+                wandb.log(batch_metrics, step=step)
             
             # 更新进度条
             pbar.set_postfix({
@@ -282,7 +266,6 @@ class Trainer:
         # 检查是否到达保存频率
         freq = self.config['monitoring']['visualizations']['logging']['checkpoint_frequency']
         if epoch % freq == 0:
-            # 保存最新的检查点
             checkpoint_path = os.path.join(
                 self.config['training']['checkpoint_dir'],
                 f'checkpoint_epoch_{epoch}.pth'
@@ -311,7 +294,7 @@ class Trainer:
         min_delta = self.config['training']['early_stopping']['min_delta']
         
         for epoch in range(1, epochs + 1):
-            self.current_epoch = epoch  # 更新当前epoch
+            self.current_epoch = epoch
             print(f"\nEpoch {epoch}/{epochs}")
             print("-" * 50)
             
@@ -335,9 +318,8 @@ class Trainer:
             self.history['val_f1'].append(val_metrics['f1'])
             self.history['lr'].append(new_lr)
             
-            # 记录指标
+            # 记录指标到wandb
             if self.config['training']['use_wandb']:
-                # 合并所有指标到一个字典中
                 epoch_metrics = {
                     'train/loss': float(train_metrics['loss']),
                     'train/accuracy': float(train_metrics['accuracy']),
@@ -355,11 +337,6 @@ class Trainer:
                     'epoch': float(epoch)
                 }
                 wandb.log(epoch_metrics)
-            
-            # 记录到tensorboard
-            self.log_metrics(train_metrics, epoch, 'train')
-            self.log_metrics(val_metrics, epoch, 'val')
-            self.writer.add_scalar('learning_rate', new_lr, epoch)
             
             # 每5个epoch绘制一次混淆矩阵
             if epoch % 5 == 0:

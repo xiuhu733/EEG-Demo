@@ -4,7 +4,7 @@
 
 ## 项目特点
 
-- 支持多种深度学习模型架构（EEGNet、TitansEEG）
+- 支持多种深度学习模型架构（EEGNet、TitansEEG、TitansEEGMAC）
 - 完整的数据预处理和增强流程
 - 空间滤波和注意力机制
 - 自适应学习率调度
@@ -23,6 +23,7 @@ src/
 ├── models/             # 模型定义
 │   ├── eegnet.py      # EEGNet模型
 │   ├── titans_model.py # TitansEEG模型
+│   ├── titans_mac_model.py # TitansEEG MAC变体
 │   └── model_factory.py # 模型工厂
 ├── training/           # 训练相关
 │   └── train.py       # 训练脚本
@@ -33,7 +34,8 @@ src/
 │   └── utils.py       # 通用工具
 └── config/            # 配置文件
     ├── default.yaml   # EEGNet配置
-    └── titans.yaml    # TitansEEG配置
+    ├── titans.yaml    # TitansEEG配置
+    └── titans_mac.yaml # TitansEEGMAC配置
 ```
 
 ## 模型架构
@@ -62,7 +64,6 @@ model:
 - 投影层：高维特征变换
 - 神经记忆模块：使用基础版本的Neural Memory进行长期依赖建模
   - 基于[titans-pytorch](https://github.com/lucidrains/titans-pytorch)的NeuralMemory实现
-  - 不使用MAC (Memory as Context)配置
   - 适用于EEG信号的实时处理
 - 分类器：多层非线性变换
 
@@ -77,10 +78,27 @@ model:
   num_classes: 4
 ```
 
-注意：我们选择使用基础版本的Neural Memory而不是完整的MAC配置，原因是：
-1. 基础版本计算开销更小，更适合实时EEG处理
-2. EEG序列相对较短，不需要复杂的长期记忆机制
-3. 在有限的GPU内存下可以获得更好的性能平衡
+### TitansEEGMAC
+- 空间特征提取层：增强的空间信息处理
+- 投影层：高维特征变换
+- 多层神经记忆模块：使用Memory as Context (MAC)机制
+  - 多层记忆结构（默认3层）
+  - 层间上下文传递和融合
+  - 残差连接和层归一化
+- 时间注意力：自适应时序特征加权
+- 增强分类器：多层非线性变换
+
+配置参数：
+```yaml
+model:
+  name: "titanseegmac"
+  input_channels: 64
+  hidden_dim: 256    # 更大的隐藏维度
+  chunk_size: 32     # 更大的块大小以捕获长期依赖
+  num_memory_layers: 3  # 记忆层数量
+  dropout_rate: 0.3
+  num_classes: 4
+```
 
 ## 数据处理
 
@@ -103,18 +121,28 @@ model:
 
 ### 优化器设置
 - 优化器：AdamW
-- 学习率：0.001
+- 学习率：
+  - EEGNet: 0.001
+  - TitansEEG: 0.001
+  - TitansEEGMAC: 0.0005（降低以稳定训练）
 - 权重衰减：0.0001
-- 批量大小：16 (Titans) / 64 (EEGNet)
+- 批量大小：
+  - EEGNet: 64
+  - TitansEEG: 16
+  - TitansEEGMAC: 8（减小以适应更大模型）
 
 ### 学习率调度
 - 余弦退火调度
 - 最小学习率：0.00001
-- 调度周期：300轮
+- 调度周期：
+  - EEGNet/TitansEEG: 200轮
+  - TitansEEGMAC: 300轮
 
 ### 早停策略
-- 耐心值：50轮
-- 最小改进：0.0005
+- 耐心值：
+  - EEGNet/TitansEEG: 30轮
+  - TitansEEGMAC: 50轮
+- 最小改进：0.001
 - 监控指标：验证准确率
 
 ## 性能监控
@@ -154,6 +182,9 @@ python src/compare_models.py --model eegnet
 
 # 训练TitansEEG
 python src/compare_models.py --model titans
+
+# 训练TitansEEGMAC
+python src/compare_models.py --model titanseegmac
 ```
 
 4. 查看训练过程：
@@ -183,7 +214,7 @@ tensorboard --logdir=runs/模型名称_时间戳/tensorboard
 - Python 3.8+
 - PyTorch 2.0+
 - CUDA 11.0+ (推荐)
-- 8GB+ GPU内存
+- 8GB+ GPU内存（TitansEEGMAC推荐12GB+）
 
 ## 主要依赖
 
